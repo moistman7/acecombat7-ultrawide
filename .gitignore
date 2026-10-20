@@ -21,3 +21,10 @@ docs/HANDOFF*
 native/reshade/
 native/UIAddon.cpp
 native/BuildUI.cmd
+
+# Legacy local migration files and reference assets
+/Install.ps1
+/PatchBinary.cs
+/Restore.ps1
+/assets/
+/docs/
