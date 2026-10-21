@@ -3,7 +3,7 @@
 #include <d3d11_4.h>
 #include <stdint.h>
 
-typedef struct { void *object; void **original; } HookObject;
+typedef struct { void *object; void **original; ULONGLONG menuEpoch; UINT menuMasks; } HookObject;
 static HookObject devices[16], contexts[32];
 static LONG deviceCount,contextCount,captureBudget;
 static WCHAR diagnosticPath[MAX_PATH];
@@ -110,6 +110,7 @@ static void MenuTextureUpload(ID3D11Resource*,UINT,const D3D11_BOX*,const void*,
 #include "HUDFix.c"
 #include "ViewportFix.c"
 static void ResetMenuMatte(ID3D11Resource*);
+static void CopyMenuMatte(ID3D11DeviceContext*,ID3D11Resource*,UINT,UINT,UINT,UINT,ID3D11Resource*,UINT,const D3D11_BOX*);
 #include "MenuLayers.c"
 #include "MenuMatte.c"
 #include "MenuEdges.c"
@@ -119,28 +120,28 @@ static void ResetMenuMatte(ID3D11Resource*);
 #include "MenuCapture.c"
 static void STDMETHODCALLTYPE DrawIndexedHook(ID3D11DeviceContext *context,UINT count,UINT first,INT base) {
     NoteMenuLayer(context,count,first,base);CaptureMenuLayer(context,count,first,base,1);InspectSceneComposite(context);InspectDraw(context,count,first,base);LogDraw(context,0,count,first,base);NoteMenuWorldDraw(context,count);if(skipPlate&&ShouldSkipPlate(context))return;void **v=Original(context,contexts,contextCount);
-    MenuEdgeState edge;int changedEdge=ApplyMenuEdges(context,&edge);FixState state;int changed=ApplyUI(context,count,first,base,&state);
+    int inheritedMatte=menuBlackBars&&(menuEdgeExtension||menuFit)&&InheritMenuMatte(context,count);MenuEdgeState edge;int changedEdge=ApplyMenuEdges(context,&edge);FixState state;int changed=ApplyUI(context,count,first,base,&state);
     HUDState hud;int changedHUD=ApplyHUD(context,&hud);
     ((void (STDMETHODCALLTYPE*)(ID3D11DeviceContext*,UINT,UINT,INT))v[12])(context,count,first,base);
     if(textureCaptureContext==context){CaptureTarget(context,L"composite-after");textureCaptureContext=0;}
     if(changed)RestoreUI(context,&state);
-    if(changedHUD)RestoreHUD(context,&hud);CaptureSceneAfter(context);if(changedEdge)RestoreMenuEdges(context,&edge);
+    if(changedHUD)RestoreHUD(context,&hud);CaptureSceneAfter(context);if(changedEdge)RestoreMenuEdges(context,&edge);if(inheritedMatte&&(!changedEdge||!edge.matte))ApplyMenuMatte(context);
 }
 static void STDMETHODCALLTYPE DrawHook(ID3D11DeviceContext *context,UINT count,UINT first) {
-    NoteMenuLayer(context,0,0,0);CaptureMenuLayer(context,count,first,0,0);InspectSceneComposite(context);InspectDraw(context,count,first,0);LogDraw(context,1,count,first,0);void **v=Original(context,contexts,contextCount);
-    MenuEdgeState edge;int changedEdge=ApplyMenuEdges(context,&edge);HUDState hud;int changed=ApplyHUD(context,&hud);
+    NoteMenuLayer(context,0,0,0);CaptureMenuLayer(context,count,first,0,0);InspectSceneComposite(context);InspectDraw(context,count,first,0);LogDraw(context,1,count,first,0);NoteMenuWorldDraw(context,count);void **v=Original(context,contexts,contextCount);
+    int inheritedMatte=menuBlackBars&&(menuEdgeExtension||menuFit)&&InheritMenuMatte(context,count);MenuEdgeState edge;int changedEdge=ApplyMenuEdges(context,&edge);HUDState hud;int changed=ApplyHUD(context,&hud);
     ((void (STDMETHODCALLTYPE*)(ID3D11DeviceContext*,UINT,UINT))v[13])(context,count,first);
-    if(changed)RestoreHUD(context,&hud);CaptureSceneAfter(context);if(changedEdge)RestoreMenuEdges(context,&edge);
+    if(changed)RestoreHUD(context,&hud);CaptureSceneAfter(context);if(changedEdge)RestoreMenuEdges(context,&edge);if(inheritedMatte&&(!changedEdge||!edge.matte))ApplyMenuMatte(context);
 }
 static void STDMETHODCALLTYPE DrawIndexedInstancedHook(ID3D11DeviceContext *context,UINT indices,UINT instances,UINT first,INT base,UINT startInstance) {
-    NoteMenuLayer(context,0,0,0);InspectSceneComposite(context);LogDraw(context,2,indices,first,base);void **v=Original(context,contexts,contextCount);MenuEdgeState edge;int changedEdge=ApplyMenuEdges(context,&edge);HUDState hud;int changed=ApplyHUD(context,&hud);
+    NoteMenuLayer(context,0,0,0);InspectSceneComposite(context);LogDraw(context,2,indices,first,base);if(instances)NoteMenuWorldDraw(context,indices);void **v=Original(context,contexts,contextCount);int inheritedMatte=instances&&menuBlackBars&&(menuEdgeExtension||menuFit)&&InheritMenuMatte(context,indices);MenuEdgeState edge;int changedEdge=ApplyMenuEdges(context,&edge);HUDState hud;int changed=ApplyHUD(context,&hud);
     ((void(STDMETHODCALLTYPE*)(ID3D11DeviceContext*,UINT,UINT,UINT,INT,UINT))v[20])(context,indices,instances,first,base,startInstance);
-    if(changed)RestoreHUD(context,&hud);CaptureSceneAfter(context);if(changedEdge)RestoreMenuEdges(context,&edge);
+    if(changed)RestoreHUD(context,&hud);CaptureSceneAfter(context);if(changedEdge)RestoreMenuEdges(context,&edge);if(inheritedMatte&&(!changedEdge||!edge.matte))ApplyMenuMatte(context);
 }
 static void STDMETHODCALLTYPE DrawInstancedHook(ID3D11DeviceContext *context,UINT vertices,UINT instances,UINT first,UINT startInstance) {
-    NoteMenuLayer(context,0,0,0);InspectSceneComposite(context);LogDraw(context,3,vertices,first,0);void **v=Original(context,contexts,contextCount);MenuEdgeState edge;int changedEdge=ApplyMenuEdges(context,&edge);HUDState hud;int changed=ApplyHUD(context,&hud);
+    NoteMenuLayer(context,0,0,0);InspectSceneComposite(context);LogDraw(context,3,vertices,first,0);if(instances)NoteMenuWorldDraw(context,vertices);void **v=Original(context,contexts,contextCount);int inheritedMatte=instances&&menuBlackBars&&(menuEdgeExtension||menuFit)&&InheritMenuMatte(context,vertices);MenuEdgeState edge;int changedEdge=ApplyMenuEdges(context,&edge);HUDState hud;int changed=ApplyHUD(context,&hud);
     ((void(STDMETHODCALLTYPE*)(ID3D11DeviceContext*,UINT,UINT,UINT,UINT))v[21])(context,vertices,instances,first,startInstance);
-    if(changed)RestoreHUD(context,&hud);CaptureSceneAfter(context);if(changedEdge)RestoreMenuEdges(context,&edge);
+    if(changed)RestoreHUD(context,&hud);CaptureSceneAfter(context);if(changedEdge)RestoreMenuEdges(context,&edge);if(inheritedMatte&&(!changedEdge||!edge.matte))ApplyMenuMatte(context);
 }
 static void Instrument(ID3D11Device *device,ID3D11DeviceContext *context) {
     AcquireSRWLockExclusive(&hookLock);

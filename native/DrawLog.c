@@ -97,6 +97,7 @@ static void StampLog(const char *message) {
 
 /* F8 or the Steam screenshot key (F12): log the next large-target draws and the ApplyUI decisions, with the debug-key state. */
 static void ArmDrawLog(const char *key) {
+    if(!diagnostics)return; /* Steam screenshots must not trigger readbacks/log IO in release mode. */
     if(diagnostics){InterlockedIncrement(&menuCaptureGeneration);FILETIME stamp;GetSystemTimeAsFileTime(&stamp);InterlockedExchange64(&hudCaptureSerial,((LONG64)stamp.dwHighDateTime<<32)|stamp.dwLowDateTime);InterlockedExchange(&hudCaptureMask,3);}
     InterlockedIncrement(&drawLogMarker);InterlockedExchange(&drawLogBudget,2500);InterlockedExchange(&bailBudget,60);InterlockedExchange(&rawDumpBudget,6);InterlockedExchange(&hudDumpBudget,4);
     DrawLine out;out.length=0;LineText(&out,"---- ");LineText(&out,key);LineText(&out," draw log #");LineInt(&out,drawLogMarker);

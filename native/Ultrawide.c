@@ -68,7 +68,7 @@ static double HorizontalFov(int width, int height) {
 static DWORD WINAPI Worker(void *unused) {
     (void)unused;
     Paths();
-    Log("Ace7Ultrawide v0.12.0-rc.1: standalone native runtime patch starting.\r\n");
+    Log("Ace7Ultrawide v0.12.0: standalone native runtime patch starting.\r\n");
     if (!GetPrivateProfileIntW(L"Ultrawide", L"Enabled", 1, ini)) { Log("Disabled in INI.\r\n"); return 0; }
     int width = GetPrivateProfileIntW(L"Ultrawide", L"Width", 3440, ini);
     int height = GetPrivateProfileIntW(L"Ultrawide", L"Height", 1440, ini);

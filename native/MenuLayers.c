@@ -94,8 +94,8 @@ static void CopyMenuTag(ID3D11Resource *dst,UINT dstSub,UINT x,UINT y,UINT z,ID3
     if(known||old)ID3D11Resource_SetPrivateData(dst,&menuArtTag,sizeof(keep),&keep);
 }
 static void STDMETHODCALLTYPE CopyMenuResource(ID3D11DeviceContext *ctx,ID3D11Resource *dst,ID3D11Resource *src) {
-    void **v=Original(ctx,contexts,contextCount);((void(STDMETHODCALLTYPE*)(ID3D11DeviceContext*,ID3D11Resource*,ID3D11Resource*))v[47])(ctx,dst,src);CopyMenuTag(dst,0,0,0,0,src,0,0);
+    void **v=Original(ctx,contexts,contextCount);((void(STDMETHODCALLTYPE*)(ID3D11DeviceContext*,ID3D11Resource*,ID3D11Resource*))v[47])(ctx,dst,src);CopyMenuTag(dst,0,0,0,0,src,0,0);CopyMenuMatte(ctx,dst,0,0,0,0,src,0,0);
 }
 static void STDMETHODCALLTYPE CopyMenuRegion(ID3D11DeviceContext *ctx,ID3D11Resource *dst,UINT dstSub,UINT x,UINT y,UINT z,ID3D11Resource *src,UINT srcSub,const D3D11_BOX *box) {
-    void **v=Original(ctx,contexts,contextCount);((void(STDMETHODCALLTYPE*)(ID3D11DeviceContext*,ID3D11Resource*,UINT,UINT,UINT,UINT,ID3D11Resource*,UINT,const D3D11_BOX*))v[46])(ctx,dst,dstSub,x,y,z,src,srcSub,box);CopyMenuTag(dst,dstSub,x,y,z,src,srcSub,box);
+    void **v=Original(ctx,contexts,contextCount);((void(STDMETHODCALLTYPE*)(ID3D11DeviceContext*,ID3D11Resource*,UINT,UINT,UINT,UINT,ID3D11Resource*,UINT,const D3D11_BOX*))v[46])(ctx,dst,dstSub,x,y,z,src,srcSub,box);CopyMenuTag(dst,dstSub,x,y,z,src,srcSub,box);CopyMenuMatte(ctx,dst,dstSub,x,y,z,src,srcSub,box);
 }

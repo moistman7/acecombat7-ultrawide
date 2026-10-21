@@ -62,10 +62,12 @@ void main(triangle Vertex input[3],uint id:SV_PrimitiveID,inout TriangleStream<V
     // Hidden and sliding menu planes share this material. Fitting an offscreen
     // plane recenters it over the active menu and reveals inactive submenu text.
     bool centered=abs(left+right)<.02&&abs(top+bottom)<.02;
-    // Captured hangar planes have clip w about 90.037 (menu planes use
-    // 48/64/480/640). Keep their side extension active while scale animates
-    // through the ordinary fit boundary, instead of switching at height 2.02.
-    bool hangar=menuLayout.z>1.5&&flat&&centered&&w0>88&&w0<92&&span<1.98&&height>1.2&&height<2.2;
+    // Hangar transitions start near depth 64, then settle near 90. The CPU
+    // marks scene panels separately from mission/title layers at the same depth.
+    // Keep the settled UI height throughout the camera/selection transition.
+    // Preserving native scale still allows the game's 4.6% selection zoom.
+    bool scenePanel=menuLayout.z>2.5&&w0>60&&w0<100;
+    bool hangar=menuLayout.z>1.5&&flat&&centered&&(scenePanel||(w0>88&&w0<92))&&span<1.98&&height>1.2&&height<2.2;
     bool fit=!hangar&&flat&&centered&&span<1.98&&height>1.6&&height<2.02;
     // Captured hangar UI is flat, with NDC height 2.0816. Preserve that
     // overscan and its text size; extend its sides without fitting to height.
@@ -75,7 +77,7 @@ void main(triangle Vertex input[3],uint id:SV_PrimitiveID,inout TriangleStream<V
     if(id&1)return; // The first triangle already covered the whole quad.
     corner[0]=input[0];corner[1]=input[1];corner[2]=input[2];
     sourceFront=Cross(input[0],input[1],input[2])>0;
-    fitScale=fit?2/height:1;fitX=fit?(left+right)*.5:0;fitY=fit?(top+bottom)*.5:0;
+    fitScale=hangar&&scenePanel?2.0816/height:fit?2/height:1;fitX=fit?(left+right)*.5:0;fitY=fit?(top+bottom)*.5:0;
     float s=fit?span*fitScale*.5:0;
     // Which texture column sits on the left of the screen.
     Vertex a=At(minU,minV),b=At(maxU,minV);bool uLeft=a.position.x/a.position.w<b.position.x/b.position.w;

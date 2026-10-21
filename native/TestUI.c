@@ -117,5 +117,9 @@ void TestMain(void) {
     labelClip.right=100;ID3D11DeviceContext_RSSetScissorRects(ctx,1,&labelClip);NoteMenuLayer(ctx,6,0,0);if(MenuArt((ID3D11Resource*)labelTarget))Fail(93);
     labelClip.right=1920;ID3D11DeviceContext_RSSetScissorRects(ctx,1,&labelClip);NoteMenuLayer(ctx,6,0,0);if(!MenuArt((ID3D11Resource*)labelTarget))Fail(94);
     const float clear[4]={0};ID3D11DeviceContext_ClearRenderTargetView(ctx,labelRT,clear);if(MenuArt((ID3D11Resource*)labelTarget))Fail(95);
+    /* A normal Steam screenshot must not arm logging or GPU capture when
+       diagnostics are disabled, even though F12 remains a screenshot key. */
+    diagnostics=0;LONG markerBefore=drawLogMarker,budgetBefore=drawLogBudget,rawBefore=rawDumpBudget,hudBefore=hudDumpBudget;
+    ArmDrawLog("release screenshot");if(drawLogMarker!=markerBefore||drawLogBudget!=budgetBefore||rawDumpBudget!=rawBefore||hudDumpBudget!=hudBefore)Fail(105);
     ExitProcess(0);
 }

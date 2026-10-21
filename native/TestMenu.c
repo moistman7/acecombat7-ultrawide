@@ -1,5 +1,8 @@
 #include "Ultrawide.c"
 #include "TestMenuVS.h"
+#include "TestMenuCompositeVS.h"
+#include "TestMenuCompositePS.h"
+static BYTE capturedMenu[1920*1080*4],backdropPixels[480*270*4];
 static BYTE uiPixels[1920*1080*4],code[32768];
 static BYTE footerBaseline[3440*4],descriptionBaseline[3440*4];
 static BYTE overscanBaseline[3][3440*4];
@@ -40,20 +43,27 @@ void TestMain(void){
             ID3D11DeviceContext_Unmap(ctx,(ID3D11Resource*)staging,0);
         }
     }
-    /* Captured hangar depth, with scale moving across the old 2.02 gate.
-       Every step must extend sides and preserve the center, in both windings. */
+    /* Aircraft selection transitions through depth 64 to 90 and crosses the
+       old height=2.02 fit gate. Every state must match the settled reference
+       layout, including footer text, in both windings. Mission/title fitting
+       at the shared depth is checked separately below. */
     menuBlackBars=1;menuSpan=0;
-    for(int winding=0;winding<2;++winding){order[0]=(float)winding;order[1]=2;order[3]=0;raster.FrontCounterClockwise=winding;ID3D11RasterizerState_Release(rs);Require(SUCCEEDED(ID3D11Device_CreateRasterizerState(device,&raster,&rs)),62);ID3D11DeviceContext_RSSetState(ctx,rs);
-      for(UINT step=0;step<4;++step){const float scales[4]={.93f,.98f,1.0f,1.0408f};order[2]=scales[step];ID3D11DeviceContext_UpdateSubresource(ctx,(ID3D11Resource*)orderCB,0,0,order,0,0);
-        for(int enabled=0;enabled<2;++enabled){menuEdgeExtension=enabled;menuFit=0;const float white[4]={1,1,1,1};ID3D11DeviceContext_ClearRenderTargetView(ctx,rt,white);MenuEdgeState transition;int applied=ApplyMenuEdges(ctx,&transition);Require(applied==enabled,63);((void(STDMETHODCALLTYPE*)(ID3D11DeviceContext*,UINT,UINT))Original(ctx,contexts,contextCount)[13])(ctx,6,0);if(applied)RestoreMenuEdges(ctx,&transition);
-          ID3D11DeviceContext_CopyResource(ctx,(ID3D11Resource*)staging,(ID3D11Resource*)target);D3D11_MAPPED_SUBRESOURCE map;Require(SUCCEEDED(ID3D11DeviceContext_Map(ctx,(ID3D11Resource*)staging,0,D3D11_MAP_READ,0,&map)),64);BYTE *row=(BYTE*)map.pData+720*map.RowPitch;
-          if(!enabled)BytesCopy(footerBaseline,row,sizeof(footerBaseline));else {Require(row[0]==0&&row[1]==32&&row[3439*4]==0&&row[3439*4+1]==32,65);for(UINT x=600*4;x<2800*4;++x)Require(row[x]==footerBaseline[x],66);}ID3D11DeviceContext_Unmap(ctx,(ID3D11Resource*)staging,0);
+    for(int winding=0;winding<2;++winding){order[0]=(float)winding;order[3]=0;raster.FrontCounterClockwise=winding;ID3D11RasterizerState_Release(rs);Require(SUCCEEDED(ID3D11Device_CreateRasterizerState(device,&raster,&rs)),62);ID3D11DeviceContext_RSSetState(ctx,rs);
+      for(UINT depth=2;depth<=5;++depth){order[1]=(float)depth;
+       for(UINT step=0;step<9;++step){const float scales[9]={.93f,.98f,.9946f,1.0f,1.0099f,1.01f,1.0101f,1.02f,1.0408f};order[2]=scales[step];ID3D11DeviceContext_UpdateSubresource(ctx,(ID3D11Resource*)orderCB,0,0,order,0,0);
+        for(int enabled=0;enabled<2;++enabled){order[2]=enabled?scales[step]:1.0408f;ID3D11DeviceContext_UpdateSubresource(ctx,(ID3D11Resource*)orderCB,0,0,order,0,0);menuEdgeExtension=enabled;menuFit=0;menuWorldTick=GetTickCount64();const float white[4]={1,1,1,1};ID3D11DeviceContext_ClearRenderTargetView(ctx,rt,white);MenuEdgeState transition;int applied=ApplyMenuEdges(ctx,&transition);Require(applied==enabled,63);((void(STDMETHODCALLTYPE*)(ID3D11DeviceContext*,UINT,UINT))Original(ctx,contexts,contextCount)[13])(ctx,6,0);if(applied)RestoreMenuEdges(ctx,&transition);
+          ID3D11DeviceContext_CopyResource(ctx,(ID3D11Resource*)staging,(ID3D11Resource*)target);D3D11_MAPPED_SUBRESOURCE map;Require(SUCCEEDED(ID3D11DeviceContext_Map(ctx,(ID3D11Resource*)staging,0,D3D11_MAP_READ,0,&map)),64);
+          const UINT rows[3]={720,1260,1380};for(UINT r=0;r<3;++r){BYTE *row=(BYTE*)map.pData+rows[r]*map.RowPitch;
+           if(!enabled)BytesCopy(overscanBaseline[r],row,sizeof(overscanBaseline[r]));else {if(r==0)Require(row[0]==0&&row[1]==32&&row[3439*4]==0&&row[3439*4+1]==32,65);for(UINT x=600*4;x<2800*4;++x)Require(row[x]==overscanBaseline[r][x],66);}}
+          ID3D11DeviceContext_Unmap(ctx,(ID3D11Resource*)staging,0);
         }
+       }
       }
     }
+    menuWorldTick=0;
     /* Title plane inset on all four sides: fit to height, retain pillarboxes. */
     menuFit=1;menuEdgeExtension=1;menuBlackBars=1;menuSpan=0;
-    for(int winding=0;winding<2;++winding){order[0]=(float)winding;order[1]=0;order[2]=.93f;ID3D11DeviceContext_UpdateSubresource(ctx,(ID3D11Resource*)orderCB,0,0,order,0,0);raster.FrontCounterClockwise=winding;ID3D11RasterizerState_Release(rs);Require(SUCCEEDED(ID3D11Device_CreateRasterizerState(device,&raster,&rs)),37);ID3D11DeviceContext_RSSetState(ctx,rs);
+    for(int winding=0;winding<2;++winding){order[0]=(float)winding;order[1]=3;order[2]=.93f;ID3D11DeviceContext_UpdateSubresource(ctx,(ID3D11Resource*)orderCB,0,0,order,0,0);raster.FrontCounterClockwise=winding;ID3D11RasterizerState_Release(rs);Require(SUCCEEDED(ID3D11Device_CreateRasterizerState(device,&raster,&rs)),37);ID3D11DeviceContext_RSSetState(ctx,rs);
         const float white[4]={1,1,1,1};ID3D11DeviceContext_ClearRenderTargetView(ctx,rt,white);MenuEdgeState fitState;Require(ApplyMenuEdges(ctx,&fitState),38);((void(STDMETHODCALLTYPE*)(ID3D11DeviceContext*,UINT,UINT))Original(ctx,contexts,contextCount)[13])(ctx,6,0);RestoreMenuEdges(ctx,&fitState);
         ID3D11DeviceContext_CopyResource(ctx,(ID3D11Resource*)staging,(ID3D11Resource*)target);D3D11_MAPPED_SUBRESOURCE map;Require(SUCCEEDED(ID3D11DeviceContext_Map(ctx,(ID3D11Resource*)staging,0,D3D11_MAP_READ,0,&map)),39);
         BYTE *top=(BYTE*)map.pData+1720*4,*bottom=(BYTE*)map.pData+1439*map.RowPitch+1720*4,*row=(BYTE*)map.pData+720*map.RowPitch;Require(top[0]==0&&top[1]==32&&bottom[0]==0&&bottom[1]==32,40);Require(row[0]==255&&row[439*4]==255&&row[3000*4]==255&&row[3439*4]==255,41);Require(row[440*4]==0&&row[2999*4]==0,42);
@@ -78,7 +88,34 @@ void TestMain(void){
     /* A new 3D scene discards menu matte state before map/hangar UI. */
     menuBlackBars=menuEdgeExtension=1;Require(ApplyMenuMatte(ctx)&&CurrentMenuMatte(ctx),67);NoteMenuWorldDraw(ctx,6000);Require(!CurrentMenuMatte(ctx),68);
     order[0]=order[1]=order[3]=0;order[2]=.93f;ID3D11DeviceContext_UpdateSubresource(ctx,(ID3D11Resource*)orderCB,0,0,order,0,0);
-    MenuEdgeState mapState;Require(ApplyMenuEdges(ctx,&mapState)&&!mapState.matte,69);RestoreMenuEdges(ctx,&mapState);menuBlackBars=0;
+    MenuEdgeState mapState;Require(ApplyMenuEdges(ctx,&mapState)&&!mapState.matte,69);RestoreMenuEdges(ctx,&mapState);
+    /* Exercise every hooked draw path with a scene-sized submission. A null
+       PS prevents color writes; the check is the menu state seen by later UI.
+       Keep the threshold per mesh: many small UI instances are not a scene. */
+    ID3D11DeviceContext_PSSetShader(ctx,0,0,0);
+    static USHORT sceneIndices[6000];ID3D11Buffer *sceneIB=0;
+    D3D11_BUFFER_DESC sceneDesc={sizeof(sceneIndices),D3D11_USAGE_DEFAULT,D3D11_BIND_INDEX_BUFFER,0,0,0};
+    D3D11_SUBRESOURCE_DATA sceneData={sceneIndices,0,0};
+    Require(SUCCEEDED(ID3D11Device_CreateBuffer(device,&sceneDesc,&sceneData,&sceneIB)),70);
+    ID3D11DeviceContext_IASetIndexBuffer(ctx,sceneIB,DXGI_FORMAT_R16_UINT,0);
+    for(int fitOnly=0;fitOnly<2;++fitOnly){menuEdgeExtension=!fitOnly;menuFit=fitOnly;
+        for(int path=0;path<4;++path){Require(ApplyMenuMatte(ctx)&&CurrentMenuMatte(ctx),71);menuWorldTick=0;
+            if(path==0)ID3D11DeviceContext_Draw(ctx,6000,0);
+            if(path==1)ID3D11DeviceContext_DrawIndexed(ctx,6000,0,0);
+            if(path==2)ID3D11DeviceContext_DrawInstanced(ctx,6000,1,0,0);
+            if(path==3)ID3D11DeviceContext_DrawIndexedInstanced(ctx,6000,1,0,0,0);
+            Require(!CurrentMenuMatte(ctx)&&menuWorldTick,72);
+        }
+        Require(ApplyMenuMatte(ctx),73);menuWorldTick=0;
+        ID3D11DeviceContext_DrawInstanced(ctx,6,1000,0,0);
+        ID3D11DeviceContext_DrawIndexedInstanced(ctx,6,1000,0,0,0);
+        ID3D11DeviceContext_DrawInstanced(ctx,6000,0,0,0);
+        ID3D11DeviceContext_DrawIndexedInstanced(ctx,6000,0,0,0,0);
+        Require(CurrentMenuMatte(ctx)&&!menuWorldTick,74);
+    }
+    ID3D11DeviceContext_IASetIndexBuffer(ctx,0,DXGI_FORMAT_UNKNOWN,0);ID3D11Buffer_Release(sceneIB);
+    ResetCurrentMenuMatte(ctx);ID3D11DeviceContext_PSSetShader(ctx,ps,0,0);
+    menuEdgeExtension=1;menuFit=0;menuBlackBars=0;
     /* Inactive and sliding planes must retain their exact source placement.
        A previous fit recentered these planes and exposed hidden submenu text. */
     menuFit=menuSpan=0;order[1]=order[2]=0;
@@ -94,5 +131,83 @@ void TestMain(void){
             }
         }
     }
+    /* Replay the captured mission background through ping-pong primary targets.
+       The postprocess deliberately tints even black input pixels. Both side bars
+       must be cleared after each pass while center pixels match the control. */
+    file=CreateFileW(L"C:\\Users\\aids7\\dev\\acecombat7-ultrawide\\native\\build\\menu-composition.bgra",GENERIC_READ,FILE_SHARE_READ,0,OPEN_EXISTING,0,0);
+    Require(file!=INVALID_HANDLE_VALUE,75);ReadFile(file,capturedMenu,sizeof(capturedMenu),&size,0);CloseHandle(file);Require(size==sizeof(capturedMenu),76);
+    D3D11_TEXTURE2D_DESC capturedDesc={1920,1080,1,1,DXGI_FORMAT_B8G8R8A8_UNORM,{1,0},D3D11_USAGE_DEFAULT,D3D11_BIND_SHADER_RESOURCE,0,0};
+    D3D11_SUBRESOURCE_DATA capturedData={capturedMenu,1920*4,0};ID3D11Texture2D *captured=0;ID3D11ShaderResourceView *capturedView=0;
+    Require(SUCCEEDED(ID3D11Device_CreateTexture2D(device,&capturedDesc,&capturedData,&captured)),77);
+    Require(SUCCEEDED(ID3D11Device_CreateShaderResourceView(device,(ID3D11Resource*)captured,0,&capturedView)),78);
+    ID3D11VertexShader *compositeVS=0;ID3D11PixelShader *compositePS=0;
+    Require(SUCCEEDED(ID3D11Device_CreateVertexShader(device,TestMenuCompositeVS,sizeof(TestMenuCompositeVS),0,&compositeVS)),79);
+    Require(SUCCEEDED(ID3D11Device_CreatePixelShader(device,TestMenuCompositePS,sizeof(TestMenuCompositePS),0,&compositePS)),80);
+    ID3D11DeviceContext_VSSetShader(ctx,compositeVS,0,0);ID3D11DeviceContext_PSSetShader(ctx,compositePS,0,0);
+    ID3D11ShaderResourceView *empty[16]={0};ID3D11DeviceContext_PSSetShaderResources(ctx,0,16,empty);
+    raster.CullMode=D3D11_CULL_NONE;ID3D11RasterizerState_Release(rs);Require(SUCCEEDED(ID3D11Device_CreateRasterizerState(device,&raster,&rs)),81);ID3D11DeviceContext_RSSetState(ctx,rs);
+    ID3D11Texture2D *chain[3]={0};ID3D11RenderTargetView *chainRT[3]={0};ID3D11ShaderResourceView *chainView[3]={0};
+    D3D11_TEXTURE2D_DESC chainDesc={3440,1440,1,1,DXGI_FORMAT_R8G8B8A8_UNORM,{1,0},D3D11_USAGE_DEFAULT,D3D11_BIND_RENDER_TARGET|D3D11_BIND_SHADER_RESOURCE,0,0};
+    for(UINT i=0;i<3;++i){Require(SUCCEEDED(ID3D11Device_CreateTexture2D(device,&chainDesc,0,&chain[i])),82);Require(SUCCEEDED(ID3D11Device_CreateRenderTargetView(device,(ID3D11Resource*)chain[i],0,&chainRT[i])),83);Require(SUCCEEDED(ID3D11Device_CreateShaderResourceView(device,(ID3D11Resource*)chain[i],0,&chainView[i])),84);}
+    menuFit=menuEdgeExtension=1;
+    for(int policy=0;policy<2;++policy){MenuMatteEpoch(ctx,1);menuBlackBars=policy;
+        for(UINT pass=0;pass<3;++pass){ID3D11DeviceContext_PSSetShaderResources(ctx,0,16,empty);ID3D11DeviceContext_OMSetRenderTargets(ctx,1,&chainRT[pass],0);
+            const float clearMenu[4]={1,1,1,1};ID3D11DeviceContext_ClearRenderTargetView(ctx,chainRT[pass],clearMenu);
+            ID3D11ShaderResourceView *input=pass?chainView[pass-1]:capturedView;ID3D11DeviceContext_PSSetShaderResources(ctx,3,1,&input);
+            ID3D11DeviceContext_Draw(ctx,3,0);if(!pass)Require(ApplyMenuMatte(ctx),85);
+            ID3D11DeviceContext_CopyResource(ctx,(ID3D11Resource*)staging,(ID3D11Resource*)chain[pass]);D3D11_MAPPED_SUBRESOURCE map;
+            Require(SUCCEEDED(ID3D11DeviceContext_Map(ctx,(ID3D11Resource*)staging,0,D3D11_MAP_READ,0,&map)),86);BYTE *row=(BYTE*)map.pData+720*map.RowPitch;
+            if(pass==2){if(!policy){Require(row[1]>0&&row[3439*4+1]>0,87);BytesCopy(footerBaseline,row,sizeof(footerBaseline));}
+                else {for(UINT x=0;x<439;++x)for(UINT c=0;c<4;++c){Require(row[x*4+c]==(c==3?255:0),88);Require(row[(3439-x)*4+c]==(c==3?255:0),89);}
+                    for(UINT x=500*4;x<2940*4;++x)Require(row[x]==footerBaseline[x],90);}}
+            ID3D11DeviceContext_Unmap(ctx,(ID3D11Resource*)staging,0);
+        }
+    }
+    /* Scene reset invalidates marks on every old intermediate, not just the
+       target currently bound. Old inputs must not re-mask map/hangar frames. */
+    NoteMenuWorldDraw(ctx,6000);for(UINT i=0;i<3;++i)Require(!ResourceMenuMatte(ctx,(ID3D11Resource*)chain[i]),91);
+    ID3D11DeviceContext_PSSetShaderResources(ctx,0,16,empty);ID3D11DeviceContext_OMSetRenderTargets(ctx,1,&chainRT[0],0);ID3D11DeviceContext_PSSetShaderResources(ctx,3,1,&chainView[2]);
+    ID3D11DeviceContext_Draw(ctx,3,0);Require(!CurrentMenuMatte(ctx),92);
+    ID3D11DeviceContext_PSSetShaderResources(ctx,0,16,empty);Require(ApplyMenuMatte(ctx),93);
+    ID3D11DeviceContext_CopyResource(ctx,(ID3D11Resource*)chain[1],(ID3D11Resource*)chain[0]);Require(ResourceMenuMatte(ctx,(ID3D11Resource*)chain[1]),94);
+    D3D11_BOX half={0,0,0,1720,1440,1};ID3D11DeviceContext_CopySubresourceRegion(ctx,(ID3D11Resource*)chain[1],0,0,0,0,(ID3D11Resource*)chain[0],0,&half);Require(!ResourceMenuMatte(ctx,(ID3D11Resource*)chain[1]),95);
+    /* A clipped widget or a smaller viewport cannot classify a whole target. */
+    ID3D11DeviceContext_OMSetRenderTargets(ctx,1,&chainRT[2],0);ResetCurrentMenuMatte(ctx);ID3D11DeviceContext_PSSetShaderResources(ctx,3,1,&chainView[0]);
+    D3D11_VIEWPORT partial={100,0,3200,1440,0,1};ID3D11DeviceContext_RSSetViewports(ctx,1,&partial);Require(!InheritMenuMatte(ctx,3),96);ID3D11DeviceContext_RSSetViewports(ctx,1,&vp);
+    raster.ScissorEnable=TRUE;ID3D11RasterizerState_Release(rs);Require(SUCCEEDED(ID3D11Device_CreateRasterizerState(device,&raster,&rs)),97);ID3D11DeviceContext_RSSetState(ctx,rs);
+    D3D11_RECT clippedWidget={0,0,100,100};ID3D11DeviceContext_RSSetScissorRects(ctx,1,&clippedWidget);Require(!InheritMenuMatte(ctx,3),98);
+    ID3D11DeviceContext_PSSetShaderResources(ctx,0,16,empty);ID3D11DeviceContext_OMSetRenderTargets(ctx,1,&rt,0);menuBlackBars=0;
+    /* Real Slate backdrop shaders + captured 480x270 blue gradient. Preserve
+       all original pixels on the left, remove the hard boundary at x=2560,
+       restore state, and never acquire a menu mask on the map. */
+    file=CreateFileW(L"D:\\SteamLibrary\\steamapps\\common\\ACE COMBAT 7\\Ace7NativeUI\\8f3937c557a87704-vs.cso",GENERIC_READ,FILE_SHARE_READ,0,OPEN_EXISTING,0,0);Require(file!=INVALID_HANDLE_VALUE,100);ReadFile(file,code,sizeof(code),&size,0);CloseHandle(file);
+    ID3D11VertexShader *backdropVS=0;Require(SUCCEEDED(ID3D11Device_CreateVertexShader(device,code,size,0,&backdropVS)),101);
+    static const D3D11_INPUT_ELEMENT_DESC elements[5]={{"ATTRIBUTE",0,DXGI_FORMAT_R32G32B32A32_FLOAT,0,0,D3D11_INPUT_PER_VERTEX_DATA,0},{"ATTRIBUTE",1,DXGI_FORMAT_R32G32_FLOAT,0,16,D3D11_INPUT_PER_VERTEX_DATA,0},{"ATTRIBUTE",2,DXGI_FORMAT_R32G32_FLOAT,0,24,D3D11_INPUT_PER_VERTEX_DATA,0},{"ATTRIBUTE",3,DXGI_FORMAT_R8G8B8A8_UNORM,0,32,D3D11_INPUT_PER_VERTEX_DATA,0},{"ATTRIBUTE",4,DXGI_FORMAT_R16G16_UINT,0,36,D3D11_INPUT_PER_VERTEX_DATA,0}};
+    ID3D11InputLayout *backdropLayout=0;Require(SUCCEEDED(ID3D11Device_CreateInputLayout(device,elements,5,code,size,&backdropLayout)),102);
+    file=CreateFileW(L"D:\\SteamLibrary\\steamapps\\common\\ACE COMBAT 7\\Ace7NativeUI\\5eae2582c19da3f5-ps.cso",GENERIC_READ,FILE_SHARE_READ,0,OPEN_EXISTING,0,0);Require(file!=INVALID_HANDLE_VALUE,103);ReadFile(file,code,sizeof(code),&size,0);CloseHandle(file);
+    ID3D11PixelShader *backdropPS=0;Require(SUCCEEDED(ID3D11Device_CreatePixelShader(device,code,size,0,&backdropPS)),104);
+    file=CreateFileW(L"C:\\Users\\aids7\\dev\\acecombat7-ultrawide\\native\\build\\map-backdrop.bgra",GENERIC_READ,FILE_SHARE_READ,0,OPEN_EXISTING,0,0);Require(file!=INVALID_HANDLE_VALUE,105);ReadFile(file,backdropPixels,sizeof(backdropPixels),&size,0);CloseHandle(file);Require(size==sizeof(backdropPixels),106);
+    capturedDesc.Width=480;capturedDesc.Height=270;capturedData.pSysMem=backdropPixels;capturedData.SysMemPitch=480*4;ID3D11Texture2D *backdropTexture=0;ID3D11ShaderResourceView *backdropView=0;
+    Require(SUCCEEDED(ID3D11Device_CreateTexture2D(device,&capturedDesc,&capturedData,&backdropTexture)),107);Require(SUCCEEDED(ID3D11Device_CreateShaderResourceView(device,(ID3D11Resource*)backdropTexture,0,&backdropView)),108);
+    float backdropVertices[60]={0};static const float uv[12]={0,0,1,0,0,1,0,1,1,0,1,1};
+    for(UINT i=0;i<6;++i){float *v=backdropVertices+i*10;v[0]=v[4]=uv[i*2];v[1]=v[5]=uv[i*2+1];v[2]=v[3]=1;v[6]=uv[i*2]*2560;v[7]=uv[i*2+1]*1440;*(UINT*)(v+8)=0xffffffff;}
+    D3D11_BUFFER_DESC backdropBD={sizeof(backdropVertices),D3D11_USAGE_DEFAULT,D3D11_BIND_VERTEX_BUFFER,0,0,0};D3D11_SUBRESOURCE_DATA backdropData={backdropVertices,0,0};ID3D11Buffer *backdropVB=0;Require(SUCCEEDED(ID3D11Device_CreateBuffer(device,&backdropBD,&backdropData,&backdropVB)),109);
+    float backdropMatrix[24]={0};backdropMatrix[8]=2.0f/3440;backdropMatrix[13]=-2.0f/1440;backdropMatrix[20]=-1;backdropMatrix[21]=1;backdropMatrix[23]=1;
+    backdropBD.ByteWidth=sizeof(backdropMatrix);backdropBD.BindFlags=D3D11_BIND_CONSTANT_BUFFER;backdropData.pSysMem=backdropMatrix;ID3D11Buffer *backdropCB=0;Require(SUCCEEDED(ID3D11Device_CreateBuffer(device,&backdropBD,&backdropData,&backdropCB)),110);
+    float backdropGamma[24]={0};backdropGamma[8]=backdropGamma[9]=1;backdropData.pSysMem=backdropGamma;ID3D11Buffer *backdropPSCB=0;Require(SUCCEEDED(ID3D11Device_CreateBuffer(device,&backdropBD,&backdropData,&backdropPSCB)),111);
+    ID3D11DeviceContext_VSSetShader(ctx,backdropVS,0,0);ID3D11DeviceContext_PSSetShader(ctx,backdropPS,0,0);ID3D11DeviceContext_IASetInputLayout(ctx,backdropLayout);UINT stride=40,offset=0;ID3D11DeviceContext_IASetVertexBuffers(ctx,0,1,&backdropVB,&stride,&offset);
+    ID3D11DeviceContext_VSSetConstantBuffers(ctx,0,1,&backdropCB);ID3D11DeviceContext_PSSetConstantBuffers(ctx,0,1,&backdropPSCB);ID3D11DeviceContext_PSSetConstantBuffers(ctx,1,1,&backdropPSCB);
+    ID3D11DeviceContext_PSSetShaderResources(ctx,0,1,&backdropView);D3D11_RECT backdropClip={0,0,2560,1440};ID3D11DeviceContext_RSSetScissorRects(ctx,1,&backdropClip);
+    menuBlackBars=1;menuFit=0;MenuMatteEpoch(ctx,1);
+    for(int enabled=0;enabled<2;++enabled){menuEdgeExtension=enabled;const float pink[4]={1,0,1,1};ID3D11DeviceContext_ClearRenderTargetView(ctx,rt,pink);ID3D11DeviceContext_Draw(ctx,6,0);
+        Require(!CurrentMenuMatte(ctx),112);D3D11_RECT restoredClip;UINT clipCount=1;ID3D11DeviceContext_RSGetScissorRects(ctx,&clipCount,&restoredClip);Require(clipCount==1&&restoredClip.right==2560,113);
+        ID3D11DeviceContext_CopyResource(ctx,(ID3D11Resource*)staging,(ID3D11Resource*)target);D3D11_MAPPED_SUBRESOURCE map;Require(SUCCEEDED(ID3D11DeviceContext_Map(ctx,(ID3D11Resource*)staging,0,D3D11_MAP_READ,0,&map)),114);
+        BYTE *row=(BYTE*)map.pData+720*map.RowPitch;if(!enabled){BytesCopy(footerBaseline,row,sizeof(footerBaseline));Require(row[3000*4]==255&&row[3000*4+2]==255,115);}
+        else {for(UINT x=0;x<2559*4;++x){int delta=(int)row[x]-(int)footerBaseline[x];Require(delta>=-1&&delta<=1,116);}
+            for(UINT x=2560;x<3440;++x)for(UINT c=0;c<3;++c){int delta=(int)row[x*4+c]-(int)row[2559*4+c];Require(delta>=-1&&delta<=1,117);}}
+        ID3D11DeviceContext_Unmap(ctx,(ID3D11Resource*)staging,0);
+    }
+    /* Unrelated small scissor rectangles never qualify for backdrop expansion. */
+    backdropClip.right=100;ID3D11DeviceContext_RSSetScissorRects(ctx,1,&backdropClip);MenuEdgeState unrelated;Require(!ApplyMenuEdges(ctx,&unrelated),118);
     ID3D11DeviceContext_GSSetShader(ctx,menuEdgeResources[0].shader,0,0);MenuEdgeState state;Require(!ApplyMenuEdges(ctx,&state),24);ID3D11DeviceContext_GSSetShader(ctx,0,0,0);ExitProcess(0);
 }

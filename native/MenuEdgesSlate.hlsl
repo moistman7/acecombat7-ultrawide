@@ -24,6 +24,20 @@ void main(triangle Vertex input[3],inout TriangleStream<Vertex> output) {
     float minT=min(ts.x,min(ts.y,ts.z)),maxT=max(ts.x,max(ts.y,ts.z));
     float span=right-left,height=top-bottom;
     bool expand=span>.4&&span<1.98&&height>1.6&&height<2.02&&maxU>minU;
+    // The 480x270 blue backdrop is anchored to the left 16:9 area. Extend
+    // only its right edge. Extrapolate UVs so the original area retains its
+    // sampling; the clamped sampler repeats its last column beyond the seam.
+    if(menuLayout.w<-.5){
+        [unroll]for(uint j=0;j<3;++j){Vertex v=input[j];
+            if(expand&&abs(v.position.x/v.position.w-right)<1e-5){
+                float delta=(1-right)/span;
+                if(v.extra.z!=0)v.extra.x+=delta*(maxU-minU)/v.extra.z;
+                v.uv.x+=delta*(maxT-minT);v.position.x=v.position.w;
+            }
+            output.Append(v);
+        }
+        output.RestartStrip();return;
+    }
     float scale=expand?2/height:1,centerX=(left+right)*.5,centerY=(top+bottom)*.5;
     float scaledLeft=(left-centerX)*scale,scaledSpan=span*scale;
     [unroll]for(uint i=0;i<3;++i){
